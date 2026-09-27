@@ -1,22 +1,28 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  ValidateIf,
+  IsString,
+  MinLength,
+} from 'class-validator';
 import { UserRole } from '../../generated/prisma/client';
 
 export class UpdateUserDto {
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @MinLength(2)
   firstName?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @MinLength(2)
   lastName?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(UserRole)
   role?: UserRole;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsBoolean()
   isActive?: boolean;
 }

@@ -1,25 +1,25 @@
 import {
   IsEmail,
   IsNotEmpty,
-  IsOptional,
+  ValidateIf,
   IsString,
   MinLength,
 } from 'class-validator';
 
 export class RegisterDto {
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(8)
-  password: string;
+  password!: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @IsNotEmpty()
   firstName?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @IsNotEmpty()
   lastName?: string;

@@ -1,38 +1,37 @@
 import {
   IsEnum,
   IsInt,
-  IsOptional,
+  ValidateIf,
   IsString,
   MaxLength,
   MinLength,
 } from 'class-validator';
-import {
-  TicketPriority,
-  TicketStatus,
-} from '../../generated/prisma/client';
+import { TicketPriority, TicketStatus } from '../../generated/prisma/client';
 
 export class UpdateTicketDto {
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @MinLength(3)
   @MaxLength(120)
   title?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @MinLength(10)
   @MaxLength(5000)
   description?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(TicketStatus)
   status?: TicketStatus;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(TicketPriority)
   priority?: TicketPriority;
 
-  @IsOptional()
+  @ValidateIf(
+    (_object, value: unknown) => value !== undefined && value !== null,
+  )
   @IsInt()
   assignedToId?: number | null;
 }

@@ -1,47 +1,37 @@
 import { Transform } from 'class-transformer';
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Max,
-  Min,
-} from 'class-validator';
-import {
-  TicketPriority,
-  TicketStatus,
-} from '../../generated/prisma/client';
+import { IsEnum, IsInt, ValidateIf, IsString, Max, Min } from 'class-validator';
+import { TicketPriority, TicketStatus } from '../../generated/prisma/client';
 
 export class ListTicketsQueryDto {
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   search?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(TicketStatus)
   status?: TicketStatus;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(TicketPriority)
   priority?: TicketPriority;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @Transform(({ value }) => Number(value))
   @IsInt()
   createdById?: number;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @Transform(({ value }) => Number(value))
   @IsInt()
   assignedToId?: number;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @Transform(({ value }) => Number(value))
   @IsInt()
   @Min(1)
   page: number = 1;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @Transform(({ value }) => Number(value))
   @IsInt()
   @Min(1)

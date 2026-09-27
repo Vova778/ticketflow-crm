@@ -1,23 +1,23 @@
 import { Transform } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, ValidateIf, IsString, Max, Min } from 'class-validator';
 import { UserRole } from '../../generated/prisma/client';
 
 export class ListUsersQueryDto {
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   search?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(UserRole)
   role?: UserRole;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @Transform(({ value }) => Number(value))
   @IsInt()
   @Min(1)
   page: number = 1;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @Transform(({ value }) => Number(value))
   @IsInt()
   @Min(1)

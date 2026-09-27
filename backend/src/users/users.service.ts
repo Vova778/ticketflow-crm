@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, UserRole } from '../generated/prisma/client';
 import { PrismaService } from '../prisma.service';
-import type { AuthUser } from'../auth/types/auth-user.type';
+import type { AuthUser } from '../auth/types/auth-user.type';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -114,7 +114,11 @@ export class UsersService {
       throw new BadRequestException('You cannot deactivate your own account');
     }
 
-    if (user.id === currentUser.id && dto.role && dto.role !== currentUser.role) {
+    if (
+      user.id === currentUser.id &&
+      dto.role &&
+      dto.role !== currentUser.role
+    ) {
       throw new BadRequestException('You cannot change your own role');
     }
 

@@ -7,12 +7,15 @@ import {
 import {
   Prisma,
   TicketStatus,
+  TicketPriority,
   UserRole,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma.service';
 import type { AuthUser } from '../auth/types/auth-user.type';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ListTicketsQueryDto } from './dto/list-tickets-query.dto';
+import { CreateCommentDto } from './dto/create-comment.dto';
+import { ListCommentsQueryDto } from './dto/list-comments-query.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 
 @Injectable()
@@ -36,9 +39,7 @@ export class TicketsService {
         where,
         skip,
         take: perPage,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         select: this.getTicketListSelect(),
       }),
       this.prisma.ticket.count({ where }),
@@ -113,7 +114,13 @@ export class TicketsService {
     const data = await this.resolveUpdateData(dto, ticket, currentUser);
 
     return this.prisma.ticket.update({
-      where: { id },
+      where: {
+        id,
+        AND: [this.getVisibilityWhere(currentUser)],
+        ...(currentUser.role === UserRole.USER
+          ? { status: TicketStatus.OPEN }
+          : {}),
+      },
       data,
       select: this.getTicketDetailsSelect(),
     });
@@ -140,6 +147,110 @@ export class TicketsService {
     return {
       message: 'Ticket deleted successfully',
     };
+  }
+
+  async statistics(user: AuthUser) {
+    const where = this.getVisibilityWhere(user);
+    const statusQuery = this.prisma.ticket.groupBy({
+      by: ['status'],
+      where,
+      _count: { _all: true },
+    });
+    const priorityQuery = this.prisma.ticket.groupBy({
+      by: ['priority'],
+      where,
+      _count: { _all: true },
+    });
+    const [statuses, priorities, assignedToMe, unassigned] =
+      await this.prisma.$transaction(
+        [
+          statusQuery,
+          priorityQuery,
+          this.prisma.ticket.count({
+            where: { AND: [where, { assignedToId: user.id }] },
+          }),
+          this.prisma.ticket.count({
+            where: { AND: [where, { assignedToId: null }] },
+          }),
+        ],
+        { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+      );
+    return {
+      total: statuses.reduce((sum, row) => sum + row._count._all, 0),
+      byStatus: Object.fromEntries(
+        Object.values(TicketStatus).map((status) => [
+          status,
+          statuses.find((row) => row.status === status)?._count._all ?? 0,
+        ]),
+      ),
+      byPriority: Object.fromEntries(
+        Object.values(TicketPriority).map((priority) => [
+          priority,
+          priorities.find((row) => row.priority === priority)?._count._all ?? 0,
+        ]),
+      ),
+      assignedToMe,
+      unassigned,
+    };
+  }
+
+  async findComments(id: number, query: ListCommentsQueryDto, user: AuthUser) {
+    await this.requireVisibleTicket(id, user);
+    const where: Prisma.TicketCommentWhereInput = {
+      ticketId: id,
+      ticket: this.getVisibilityWhere(user),
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.ticketComment.findMany({
+        where,
+        skip: (query.page - 1) * query.perPage,
+        take: query.perPage,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: this.getCommentSelect(),
+      }),
+      this.prisma.ticketComment.count({ where }),
+    ]);
+    return {
+      items,
+      meta: {
+        total,
+        page: query.page,
+        perPage: query.perPage,
+        lastPage: Math.ceil(total / query.perPage),
+      },
+    };
+  }
+
+  async createComment(id: number, dto: CreateCommentDto, user: AuthUser) {
+    if (!dto.content.trim())
+      throw new BadRequestException('Comment cannot be blank');
+    await this.requireVisibleTicket(id, user);
+    return this.prisma.ticketComment.create({
+      data: {
+        content: dto.content.trim(),
+        author: { connect: { id: user.id } },
+        ticket: { connect: { id, AND: [this.getVisibilityWhere(user)] } },
+      },
+      select: this.getCommentSelect(),
+    });
+  }
+
+  private async requireVisibleTicket(id: number, user: AuthUser) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id, AND: [this.getVisibilityWhere(user)] },
+      select: { id: true },
+    });
+    if (!ticket) throw new NotFoundException('Ticket not found');
+  }
+
+  private getCommentSelect() {
+    return {
+      id: true,
+      content: true,
+      createdAt: true,
+      updatedAt: true,
+      author: { select: this.getUserSelect() },
+    } satisfies Prisma.TicketCommentSelect;
   }
 
   private getVisibilityWhere(currentUser: AuthUser): Prisma.TicketWhereInput {
@@ -222,7 +333,9 @@ export class TicketsService {
     }
 
     if (currentUser.role === UserRole.MANAGER) {
-      return ticket.assignedToId === currentUser.id || ticket.assignedToId === null;
+      return (
+        ticket.assignedToId === currentUser.id || ticket.assignedToId === null
+      );
     }
 
     return ticket.createdById === currentUser.id;
@@ -242,7 +355,9 @@ export class TicketsService {
       }
 
       if (assignedToId !== currentUser.id) {
-        throw new ForbiddenException('Manager can only assign tickets to themselves');
+        throw new ForbiddenException(
+          'Manager can only assign tickets to themselves',
+        );
       }
 
       return assignedToId;
@@ -281,8 +396,18 @@ export class TicketsService {
     }
 
     if (currentUser.role === UserRole.MANAGER) {
-      if (dto.assignedToId !== undefined && dto.assignedToId !== currentUser.id) {
-        throw new ForbiddenException('Manager can only assign tickets to themselves');
+      if (dto.title !== undefined || dto.description !== undefined) {
+        throw new ForbiddenException(
+          'Manager can only update status, priority and self-assignment',
+        );
+      }
+      if (
+        dto.assignedToId !== undefined &&
+        dto.assignedToId !== currentUser.id
+      ) {
+        throw new ForbiddenException(
+          'Manager can only assign tickets to themselves',
+        );
       }
 
       return {

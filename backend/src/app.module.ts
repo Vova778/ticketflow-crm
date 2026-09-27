@@ -6,11 +6,13 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma.module';
 import { UsersModule } from './users/users.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { validateConfig } from './config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: validateConfig,
     }),
     PrismaModule,
     AuthModule,
