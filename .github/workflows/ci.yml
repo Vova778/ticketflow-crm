@@ -1,0 +1,63 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/test
+      JWT_SECRET: ci-only-secret-for-ticketflow-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run build
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test -- --runInBand
+      - run: npm run test:e2e -- --runInBand
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+      - run: npm test
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build --wait --wait-timeout 180
+      - run: docker compose exec -T backend npm run db:seed
+      - run: docker compose exec -T backend npm run db:seed
+      - run: docker compose exec -T backend npm run test:smoke
+      - run: docker compose exec -T -e API_URL=http://frontend/api backend npm run test:smoke
+      - name: Check frontend and API proxy
+        run: |
+          curl --fail http://localhost:8080/
+          curl --fail http://localhost:8080/tickets/1
+          curl --fail http://localhost:8080/api/health/db
+      - if: failure()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down

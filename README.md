@@ -1,6 +1,22 @@
-# TicketFlow CRM — backend MVP
+# TicketFlow CRM
 
-NestJS 11 + strict TypeScript + Prisma 7 + PostgreSQL + JWT/RBAC. Frontend поки не реалізований.
+Fullstack HelpDesk CRM: React + TypeScript + Vite + TanStack Query + React Hook Form + Zod; NestJS + Prisma + PostgreSQL + JWT/RBAC.
+
+Завершений MVP для локального запуску: реєстрація та вхід, dashboard, тікети, коментарі, призначення менеджерів, пошук, фільтри, пагінація та керування користувачами. Адаптивний інтерфейс для desktop і mobile.
+
+![TicketFlow workspace](docs/dashboard.png)
+
+## Архітектура
+
+```mermaid
+flowchart LR
+    Browser[React / TanStack Query] -->|/api| Proxy[Nginx / Vite proxy]
+    Proxy --> API[NestJS / JWT / RBAC]
+    API --> Prisma[Prisma]
+    Prisma --> DB[(PostgreSQL)]
+```
+
+Frontend надсилає запити через same-origin `/api`: Vite проксіює їх у розробці, Nginx — у Docker. JWT зберігається в `sessionStorage` поточної вкладки; logout очищає токен і кеш запитів. На 401 сесія завершується автоматично. Backend перевіряє актуальну роль та активність акаунта з БД на кожен захищений запит.
 
 ## Запуск у Docker
 
@@ -13,6 +29,7 @@ docker compose exec backend npm run db:seed
 
 Backend автоматично застосовує наявні міграції після готовності PostgreSQL. Дані зберігаються в наявному volume `postgres_data`. Seed запускається вручну, створює demo-акаунти без перезапису існуючих; якщо demo-користувач уже має тікети, вони зберігаються без дублювання. Створення demo-даних виконується транзакційно.
 
+- **Застосунок: http://localhost:8080**
 - API: http://localhost:3000
 - Swagger UI: http://localhost:3000/docs
 - OpenAPI JSON: http://localhost:3000/docs-json
@@ -24,6 +41,27 @@ docker compose stop
 ```
 
 Для зовнішнього розгортання задай власний `JWT_SECRET` у середовищі або кореневому `.env`; значення Compose за замовчуванням призначене для локальної розробки. Docker image містить Prisma CLI та інструменти seed для цих команд.
+
+## Локальний frontend
+
+Спочатку запусти backend (нижче), потім в іншому терміналі:
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+Відкрий http://localhost:5173. За замовчуванням Vite проксіює `/api` до http://localhost:3000. Для іншої адреси backend встанови `API_PROXY_TARGET` перед запуском Vite. Шрифти постачаються локально в frontend bundle.
+
+### Сторінки
+
+- `/login`, `/register` — вхід та реєстрація з валідацією полів.
+- `/` — статистика статусів, ключові показники, останні тікети.
+- `/tickets` — пошук, статус, пріоритет, менеджер, пагінація. Фільтри зберігаються в URL.
+- `/tickets/new` — створення тікета.
+- `/tickets/:id` — опис, редагування, статус, призначення, коментарі та підтвердження видалення.
+- `/users` — ADMIN: пошук користувачів, редагування профілю, ролі й активності. Власна роль та активність захищені.
 
 ## Локальний backend
 
@@ -117,6 +155,16 @@ Logout у цьому MVP не відкликає виданий токен на 
 
 ## Перевірки
 
+Frontend (`frontend`):
+
+```powershell
+npm run build
+npm run lint
+npm test
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) запускає перевірки обох частин, збірку Compose, міграції, повторний seed і API smoke. Workflow додано до репозиторію; він виконається після push.
+
 У `backend`:
 
 ```powershell
@@ -144,3 +192,11 @@ Smoke входить під трьома demo-ролями, створює ти�
 ## Структура
 
 `backend/src/auth` — JWT та ролі; `users` — користувачі; `tickets` — тікети, коментарі та політики доступу; `dashboard` — endpoint статистики, який повторно використовує політику TicketsService. `prisma` — схема, міграції, seed. `setup-app.ts` — спільна валідація, обробка помилок Prisma та Swagger.
+
+## Межі MVP
+
+Redis/BullMQ, email jobs, file uploads, audit logs, refresh tokens та відкликання JWT — окремий наступний етап. Вони не потрібні для завершеного MVP. Поточні тести вже входять до проєкту.
+
+Для публічного production-розгортання потрібні HTTPS, власні секрети, резервні копії БД та обмеження доступу до портів PostgreSQL/API. Demo-акаунти й локальні паролі призначені для демонстрації.
+
+Результати перевірок і відтворення сценаріїв: [Verification report](docs/verification.md).
